@@ -1,5 +1,6 @@
 age,name,short_name,type
 22,All Ages,All,aggregate
+164,Birth,Birth,specific
 2,Early Neonatal,EN,specific
 3,Late Neonatal,LN,specific
 4,Post Neonatal,PN,specific
@@ -30,18 +31,17 @@ age,name,short_name,type
 25,50-69 years,50-69,aggregate
 26,70+ years,70+,aggregate
 27,Age-standardized,,aggregate
-158,<20 years,<20,aggregate
-159,10 to 24,10-24,aggregate
-162,10 to 19,,specific
+286,60 to 89 years,60-89,aggregate
+287,65 to 89 years,65-89,aggregate
+288,70 to 89 years,70-89,aggregate
+289,75 to 94 years,75-94,aggregate
+284,20 to 54 years,20-54,aggregate
+235,95 plus,95+,aggregate
+28,<1 year,<1,aggregate
+172,0 to 9,0-9,aggregate
 41,50 to 74 years,50-74,aggregate
 169,10 to 54,,aggregate
-172,0 to 9,0-9,aggregate
-235,95 plus,95+,aggregate
-288,70 to 89 years,70-89,aggregate
-287,65 to 89 years,65-89,aggregate
-286,60 to 89 years,60-89,aggregate
+159,10 to 24,10-24,aggregate
+158,<20 years,<20,aggregate
 285,55 to 89 years,55-89,aggregate
-284,20 to 54 years,20-54,aggregate
-28,<1 year,,aggregate
-289,75 to 94 years,75-94,aggregate
 230,60 to 79,60-79,aggregate
