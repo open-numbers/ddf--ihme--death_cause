@@ -6,6 +6,9 @@ import shutil
 from ddf_utils.factory import ihme as m
 
 
+source_dir = '../source'
+
+
 def remove_old_source():
     for f in os.listdir(source_dir):
         if f.startswith('IHME') and f.endswith('zip'):
@@ -39,14 +42,15 @@ def main():
                 77, 78, 79, 8, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89,
                 90, 91, 92, 93, 94, 95, 97, 98, 99]
     measure = 1
-    metric = [1, 3]
+    metric = [1]
     sex = [1, 2, 3]
-    # age = [10, 11, 12, 13, 14, 15, 155, 16, 162, 17, 18, 19, 2, 20, 21, 3,
-    #        30, 31, 32, 4, 5, 6, 7, 8, 9, 22, 27, 1, 23]
+    # below are ages required by SG.
+    age = [22, 27, 1, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+           15, 16, 17, 18, 19, 20, 30, 31, 32, 235, 23]
     # age-standarized data: age = 27. All age data: age = 22
     # But we only need age-standarized when metric = 3.
 
-    age = [22, 27]
+    # age = [22, 27]
 
     tmp_dir = tempfile.mkdtemp()
     folders = m.bulk_download(tmp_dir, version, context, year=year,
@@ -68,4 +72,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

@@ -1,15 +1,19 @@
-# coding: utf8
+# -*- coding: utf-8 -*-
 
 import os
 import os.path as osp
+import numpy as np
 import pandas as pd
-import tempfile
 
 from ddf_utils.str import to_concept_id, format_float_digits
 from ddf_utils.factory import ihme
 
 from functools import partial
+from itertools import product
 from zipfile import ZipFile
+
+import dask
+import dask.dataframe as dd
 
 
 source_dir = '../source/'
@@ -19,67 +23,56 @@ formatter = partial(format_float_digits, digits=2)
 
 # below are configs for downloader when downloading the source files.
 MEASURES = [1]
-METRICS = [1, 3]
-AGES = [22, 27]
+METRICS = [1]
+AGES = [22, 27, 1, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+        15, 16, 17, 18, 19, 20, 30, 31, 32, 235, 23]
 
 
-def load_all_data():
-    all_data = []
-    for n in os.listdir(source_dir):
-        print(n)
-        if not n.endswith('.zip'):
+DTYPES = dict(location=np.int32, sex=np.int8, year=np.int16, cause=np.int16, age=np.int16, val=np.float,
+              measure=np.int8, metric=np.int8)
+
+
+def load_data(n):
+    # print(n)
+    f = osp.join(source_dir, n)
+    zf = ZipFile(f)
+    fname = osp.splitext(n)[0] + '.csv'
+    data = pd.read_csv(zf.open(fname), dtype=DTYPES)
+    data = data.drop(['upper', 'lower'], axis=1)
+
+    # double check things
+    assert set(data['metric'].unique().tolist()).issubset(set(METRICS))
+    assert set(data['measure'].unique().tolist()).issubset(set(MEASURES))
+    assert set(data['age'].unique().tolist()).issubset(set(AGES))
+
+    return data
+
+
+def serve_datapoint(df, concept):
+    cols_new = ['location', 'sex', 'age', 'cause', 'year', concept]
+    df.columns = cols_new
+
+    causes = df.cause.unique()
+    sexes = df.sex.unique()
+    # if concept == 'mmr_rate':
+    #     print(df.sex.unique())
+    for g_ in product(causes, sexes):
+        print(f"working on group {g_}")
+        df_ = df[(df.cause == g_[0]) & (df.sex == g_[1])]
+        if df_.empty:
             continue
-        f = osp.join(source_dir, n)
-        zf = ZipFile(f)
-        fname = osp.splitext(n)[0] + '.csv'
-        data = pd.read_csv(zf.open(fname))
-        data = data.drop(['upper', 'lower'], axis=1)
-
-        # double check things
-        assert set(data['metric'].unique().tolist()) == set(METRICS)
-        assert set(data['measure'].unique().tolist()) == set(MEASURES)
-        assert set(data['age'].unique().tolist()) == set(AGES)
-
-        # when metric / measure have only one value, enable this line to decrease memory usage
-        # data = data.drop(['metric', 'measure'], axis=1)
-        all_data.append(data)
-        zf.close()
-    return all_data
-
-
-def serve_datapoints_return_measures(data_full: pd.DataFrame, measure: dict, metric: dict):
-    all_measures = []
-
-    groups = data_full.groupby(by=['measure', 'metric'])
-
-    datapoint_output_dir = osp.join(output_dir, 'deaths')
-    os.makedirs(datapoint_output_dir, exist_ok=True)
-
-    for g in groups.groups:
-        name  = measure[g[0]] + ' ' + metric[g[1]]
-        # print(name)
-        concept = to_concept_id(name)
-        all_measures.append((concept, name))
-
-        df = groups.get_group(g)
-        df = df.rename(columns={'val': concept})
-        cause_groups = df.groupby(by='cause')  # split by cause
-        cols = ['location', 'sex', 'age', 'cause', 'year', concept]
-        df[concept] = df[concept].map(formatter)
-        # if concept == 'mmr_rate':
-        #     print(df.sex.unique())
-        for g_ in cause_groups.groups:
-            df_ = cause_groups.get_group(g_)
-            # print(g_)
-            # print(df_.age.unique())
-            # print(len(df_.year.unique()))
-            # print(len(df_.location.unique()))
-            cause = 'cause-{}'.format(g_)
-            by = ['location', 'sex', 'age', cause, 'year']
-            file_name = 'ddf--datapoints--' + concept + '--by--' + '--'.join(by) + '.csv'
-            file_path = osp.join(output_dir, 'deaths', file_name)
-            df_[cols].sort_values(by=['location', 'sex', 'age', 'year']).to_csv(file_path, index=False)
-    return all_measures
+        # print(g_)
+        # print(df_.age.unique())
+        # print(len(df_.year.unique()))
+        # print(len(df_.location.unique()))
+        df_ = df_.rename(columns={'val': concept})
+        cause = 'cause-{}'.format(g_[0])
+        sex = 'sex-{}'.format(g_[1])
+        by = ['location', sex, 'age', cause, 'year']
+        file_name = 'ddf--datapoints--' + concept + '--by--' + '--'.join(by) + '.csv'
+        file_path = osp.join(output_dir, 'deaths', file_name)
+        df_[concept] = df_[concept].map(formatter)
+        df_[cols_new].sort_values(by=['location', 'sex', 'age', 'year']).to_csv(file_path, index=False)
 
 
 def serve_entities(md):
@@ -111,16 +104,25 @@ def main():
     measure = md['measure'].copy()
 
     # datapoints
-    all_data = load_all_data()
-    data_full = all_data.pop()
+    datapoint_output_dir = osp.join(output_dir, 'deaths')
+    os.makedirs(datapoint_output_dir, exist_ok=True)
 
-    for _ in range(len(all_data)):
-        data_full = data_full.append(all_data.pop(), ignore_index=True)
+    data_full = dd.from_delayed([dask.delayed(load_data)(f) for f in os.listdir(source_dir) if f.endswith('.zip')], meta=DTYPES)
 
     metric = metric.set_index('id')['name'].to_dict()
     measure = measure.set_index('id')['short_name'].to_dict()
 
-    all_measures = serve_datapoints_return_measures(data_full, measure, metric)
+    all_measures = list()
+    measure_metric_combinations = product(MEASURES, METRICS)
+    for g in measure_metric_combinations:
+        name = measure[g[0]] + ' ' + metric[g[1]]
+        print(f'creating dattpoints for {name}')
+        concept = to_concept_id(name)
+        all_measures.append((concept, name))
+
+        cols = ['location', 'sex', 'age', 'cause', 'year', 'val']
+        df = data_full.loc[(data_full.measure == g[0]) & (data_full.metric == g[1]), cols].compute()
+        serve_datapoint(df, concept)
 
     # entities
     serve_entities(md)
